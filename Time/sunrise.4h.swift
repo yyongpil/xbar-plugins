@@ -13,15 +13,11 @@
 
 // Customizations
 
-let LOCATION = "Seattle, WA" // or lat,lon coordinates
-let DAYS = 7 // number of days to show
-let PAST_DAYS = 0 // number of days in the past to show
+let LOCATION = "London, GB" // or lat,lon coordinates
 let TIME_STYLE:DateFormatter.Style = .short // .short, .medium, .long, .full
-let LOCATION_FONT = "Menlo"
+let LOCATION_FONT = "System"
 let LOCATION_COLOR = "black"
-let SUNRISE_FONT = "Menlo"
-let SUNRISE_COLOR = "blue"
-let SYMBOL_COLOR = "orange"
+let SUNRISE_FONT = "'JetBrains Mono'"
 
 // Main code
 
@@ -38,43 +34,54 @@ coder.reverseGeocodeLocation(loc) { (placemarks, error) in
 }
 CFRunLoopRun() // wait for reverse geocode to finish
 
-print(":sunrise:\n---\n")
+print(":sunny:\n---\n")
 
 if let placemark = placemark {
     if let city = placemark.locality, let administrativeArea = placemark.administrativeArea, let country = placemark.country {
         if country == "United States" {
             print("\(city), \(administrativeArea)|font=\(LOCATION_FONT) color=\(LOCATION_COLOR)")
         } else {
-            print("\(city), \(administrativeArea), \(country)|font=\(LOCATION_FONT) color=\(LOCATION_COLOR)")
+            print("\(city), \(country)|font=\(LOCATION_FONT) color=\(LOCATION_COLOR)")
         }
     } else {
         print("\(placemark.name ?? "Unknown")")
     }
 }
 
+// find Saturday
 let today = Date()
-for i in -PAST_DAYS..<DAYS-PAST_DAYS {
+var saturday = today
+for i in 0..<7 {
     let date = Calendar.current.date(byAdding: .day, value: i, to: today)!
+    let dateFormatter = DateFormatter()
+    dateFormatter.setLocalizedDateFormatFromTemplate("E")
+    if dateFormatter.string(from: date) == "Sat" {
+        saturday = date
+    }
+}
+
+// for 20 weeks
+for i in 0..<20 {
+    let date = Calendar.current.date(byAdding: .day, value: i * 7, to: saturday)!
     if let (sunrise, sunset) = NTSolar.sunRiseAndSet(forDate: date, atLocation: coordinate, inTimeZone: timezone!) {
         let dateFormatter = DateFormatter()
-        dateFormatter.setLocalizedDateFormatFromTemplate("MMMd")
-        print(dateFormatter.string(from: date).padding(toLength: 7, withPad: " ", startingAt: 0), terminator:"")
-
+        dateFormatter.setLocalizedDateFormatFromTemplate("E MMM dd ")
+        print(dateFormatter.string(from: date), terminator:"")
         let timeFormatter = DateFormatter()
         timeFormatter.dateStyle = .none
         timeFormatter.timeStyle = TIME_STYLE
         if let timezone = timezone {
             timeFormatter.timeZone = timezone
         }
-
+        
         let sunriseTime = timeFormatter.string(from: sunrise).lowercased()
         let sunsetTime = timeFormatter.string(from: sunset).lowercased()
         let daylengthFormatter = DateComponentsFormatter()
         daylengthFormatter.unitsStyle = .abbreviated
         daylengthFormatter.allowedUnits = [.minute, .hour]
         let formattedDayLength = daylengthFormatter.string(from: sunrise, to: sunset)!
-
-        print(":sunrise: \(sunriseTime) :sunset: \(sunsetTime) :clock: \(formattedDayLength)|font=\(SUNRISE_FONT)\(i == 0 ? "-Bold" : "") color=\(SUNRISE_COLOR) sfcolor=\(SYMBOL_COLOR)")
+        
+        print(" :sunny:\(sunriseTime) :crescent_moon:\(sunsetTime)|font=\(SUNRISE_FONT) color=\("blue")")
     }
 }
 
@@ -153,6 +160,11 @@ class NTSolar {
         calendar.timeZone = inTimeZone
         var comp = calendar.dateComponents([.day, .year, .month], from: forDate)
         comp.calendar = calendar
+        // daylight saving adjustment
+        var daylightSavingOffset = 0
+        if inTimeZone.isDaylightSavingTime(for: forDate) {
+            daylightSavingOffset = 1
+        }
 
         guard let year = comp.year,
             let month = comp.month,
@@ -178,7 +190,7 @@ class NTSolar {
             riseLocalHrs -= 24.0
         }
         let riseHoursInt = Int(riseLocalHrs)
-        comp.hour = riseHoursInt
+        comp.hour = riseHoursInt + daylightSavingOffset
 
         comp.minute = Int(  (( riseLocalHrs - Double(riseHoursInt) ) * 60.0).rounded() )
         comp.second = 0
@@ -194,7 +206,7 @@ class NTSolar {
             setLocalHrs -= 24.0
         }
         let setHoursInt = Int(setLocalHrs)
-        comp.hour = setHoursInt
+        comp.hour = setHoursInt + daylightSavingOffset
         comp.minute = Int( ((setLocalHrs - Double(setHoursInt) ) * 60.0).rounded() )
         comp.second = 0
         comp.nanosecond = 0
